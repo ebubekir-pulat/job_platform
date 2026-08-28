@@ -19,7 +19,7 @@ def test_create_job_with_valid_data():
         },
     )
 
-    assert response.status_code in [200, 201]
+    assert response.status_code == 200
     data = response.json()
 
     # Verify returned id is a valid UUID
