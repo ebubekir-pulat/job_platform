@@ -2,7 +2,7 @@ import uuid
 import pytest
 from pydantic import ValidationError
 
-from app.models import Job, Status
+from job_platform.models import Job, Status
 
 def test_valid_job_can_be_constructed():
     job = Job(

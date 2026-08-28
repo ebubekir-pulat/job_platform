@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.models import Job, JobCreate
+from job_platform.models import Job, JobCreate
 
 app = FastAPI()
 

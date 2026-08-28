@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 import uuid
-from app.main import app
-from app.models import Status
+from job_platform.main import app
+from job_platform.models import Status
 
 client = TestClient(app)
 
