@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, Field
 import uuid
 from enum import IntEnum
 
@@ -9,8 +9,12 @@ class Status(IntEnum):
     SUCCEEDED = 2
     FAILED = 3
 
-class Job(BaseModel):
-    id: uuid.UUID
+class JobCreate(BaseModel):
     type: str
     payload: dict
-    status: Status
+
+class Job(BaseModel):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    type: str
+    payload: dict
+    status: Status = Status.PENDING
