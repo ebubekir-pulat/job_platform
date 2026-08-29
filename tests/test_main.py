@@ -52,3 +52,58 @@ def test_create_job_missing_payload():
     )
 
     assert response.status_code == 422
+
+def test_create_job_then_get_job():
+    # Create a job
+    create_response = client.post(
+        "/jobs",
+        json={
+            "type": "model_training",
+            "payload": {"epochs": 10},
+        },
+    )
+
+    assert create_response.status_code == 200
+
+    created_job = create_response.json()
+
+    # Get created job
+    job_id = created_job["id"]
+
+    get_response = client.get(f"/jobs/{job_id}")
+
+    assert get_response.status_code == 200
+    assert get_response.json() == created_job
+
+def test_get_nonexistent_job_returns_404():
+    job_id = uuid.uuid4()
+
+    response = client.get(f"/jobs/{job_id}")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Job not found"}
+
+def test_two_created_jobs_have_different_ids():
+    response_1 = client.post(
+        "/jobs",
+        json={
+            "type": "model_training",
+            "payload": {"epochs": 10},
+        },
+    )
+
+    response_2 = client.post(
+        "/jobs",
+        json={
+            "type": "model_training",
+            "payload": {"epochs": 5},
+        },
+    )
+
+    assert response_1.status_code == 200
+    assert response_2.status_code == 200
+
+    job_1 = response_1.json()
+    job_2 = response_2.json()
+
+    assert job_1["id"] != job_2["id"]
