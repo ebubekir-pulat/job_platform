@@ -3,10 +3,12 @@ from uuid import UUID
 
 from job_platform.models import Job, JobCreate
 from job_platform.repository import JobRepository
+from job_platform.queue import JobQueue
 
 app = FastAPI()
 
 repository = JobRepository()
+queue = JobQueue()
 
 @app.get("/")
 async def root():
@@ -19,7 +21,9 @@ async def create_job(job_data: JobCreate):
         payload=job_data.payload,
     )
 
-    return repository.create(job)
+    repository.create(job)
+    queue.enqueue(job.id)
+    return job
 
 @app.get("/jobs/{job_id}", response_model=Job)
 async def get_job(job_id: UUID):
