@@ -9,15 +9,12 @@ class JobQueue:
             host="localhost",
             port=6379,
             decode_responses=True,
+            socket_timeout=None,
         )
 
     def enqueue(self, job_id: uuid.UUID) -> None:
         self.redis.rpush(QUEUE_NAME, str(job_id))
 
     def dequeue(self) -> uuid.UUID:
-        job_id = self.redis.lpop(QUEUE_NAME)
-
-        if job_id is None:
-            raise RuntimeError("Queue is empty")
-
+        _, job_id = self.redis.blpop(QUEUE_NAME, timeout=0)
         return uuid.UUID(job_id)

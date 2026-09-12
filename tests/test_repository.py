@@ -25,3 +25,20 @@ def test_get_nonexistent_job_returns_none():
     result = repository.get(job_id)
 
     assert result is None
+
+def test_update_status():
+    repository = JobRepository()
+
+    job = Job(
+        type="test_job",
+        payload={"message": "hello"},
+    )
+
+    repository.create(job)
+
+    repository.update_status(job.id, Status.RUNNING)
+
+    result = repository.get(job.id)
+
+    assert result is not None
+    assert result.status == Status.RUNNING
