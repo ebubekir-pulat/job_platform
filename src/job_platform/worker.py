@@ -11,6 +11,33 @@ def process_job(job):
     print(f"Job {job.id} succeeded")
 
 
+def run_job(job, repository):
+    repository.update_status(job.id, Status.RUNNING)
+
+    try:
+        process_job(job)
+    except Exception as exc:
+        print(f"Job {job.id} failed: {exc}")
+        repository.update_status(job.id, Status.FAILED)
+        return
+
+    repository.update_status(job.id, Status.SUCCEEDED)
+
+
+def handle_next_job(queue, repository):
+    job_id = queue.dequeue()
+
+    print(f"Received job {job_id}")
+
+    job = repository.get(job_id)
+
+    if job is None:
+        print(f"Job {job_id} not found")
+        return
+
+    run_job(job, repository)
+
+
 def run_worker():
     queue = JobQueue()
     repository = JobRepository()
@@ -20,26 +47,8 @@ def run_worker():
     while True:
         print("Waiting for jobs...")
 
-        job_id = queue.dequeue()
+        handle_next_job(queue, repository)
 
-        print(f"Received job {job_id}")
-
-        job = repository.get(job_id)
-
-        if job is None:
-            print(f"Job {job_id} not found")
-            continue
-
-        repository.update_status(job.id, Status.RUNNING)
-
-        try:
-            process_job(job)
-        except Exception as exc:
-            print(f"Job {job.id} failed: {exc}")
-            repository.update_status(job.id, Status.FAILED)
-            continue
-
-        repository.update_status(job.id, Status.SUCCEEDED)
 
 if __name__ == "__main__":
     run_worker()
