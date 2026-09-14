@@ -33,9 +33,11 @@ def handle_next_job(queue, repository):
 
     if job is None:
         print(f"Job {job_id} not found")
+        queue.complete(job_id)
         return
 
     run_job(job, repository)
+    queue.complete(job_id)
 
 
 def run_worker():

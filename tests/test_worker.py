@@ -1,7 +1,7 @@
 from job_platform.models import Job, Status
 from job_platform.repository import JobRepository
 from job_platform.worker import process_job, run_job, handle_next_job
-from job_platform.queue import JobQueue
+from job_platform.queue import JobQueue, PROCESSING_QUEUE_NAME
 
 
 def test_process_job_succeeds():
@@ -81,3 +81,4 @@ def test_handle_next_job_processes_queued_job():
 
     assert result is not None
     assert result.status == Status.SUCCEEDED
+    assert queue.redis.llen(PROCESSING_QUEUE_NAME) == 0
