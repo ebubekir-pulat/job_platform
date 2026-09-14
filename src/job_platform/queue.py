@@ -32,3 +32,12 @@ class JobQueue:
             1,
             str(job_id),
         )
+
+    def get_processing_jobs(self) -> list[uuid.UUID]:
+        job_ids = self.redis.lrange(
+            PROCESSING_QUEUE_NAME,
+            0,
+            -1,
+        )
+
+        return [uuid.UUID(job_id) for job_id in job_ids]
