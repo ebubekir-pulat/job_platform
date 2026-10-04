@@ -1,13 +1,11 @@
+import os
+from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session 
 
-# Replace *password* with actual user password
+load_dotenv()
 
-DATABASE_URL = (
-    "postgresql+psycopg://"
-    "job_platform_user:*password*"
-    "@localhost:5432/jobplatform_db"
-)
+DATABASE_URL = os.environ["DATABASE_URL"]
 
 engine = create_engine(DATABASE_URL)
 
