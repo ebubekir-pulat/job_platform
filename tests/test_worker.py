@@ -45,7 +45,7 @@ def test_run_job_succeeds():
     assert result.status == Status.SUCCEEDED
 
 
-def test_run_job_fails():
+def test_run_job_fails_with_retry():
     repository = JobRepository()
 
     job = Job(
@@ -55,12 +55,12 @@ def test_run_job_fails():
 
     repository.create(job)
 
-    run_job(job, repository)
-
-    result = repository.get(job.id)
+    result = run_job(job, repository)
 
     assert result is not None
-    assert result.status == Status.FAILED
+    assert result.attempts == 1
+    assert result.status == Status.PENDING
+    assert result.last_error == "Job processing failed"
 
 
 def test_handle_next_job_processes_queued_job():

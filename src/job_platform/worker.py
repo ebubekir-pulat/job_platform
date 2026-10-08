@@ -12,16 +12,26 @@ def process_job(job):
 
 
 def run_job(job, repository):
-    repository.update_status(job.id, Status.RUNNING)
+    job = repository.start_attempt(job.id)
 
     try:
         process_job(job)
     except Exception as exc:
-        print(f"Job {job.id} failed: {exc}")
-        repository.update_status(job.id, Status.FAILED)
-        return
+        job.last_error = str(exc)
 
-    repository.update_status(job.id, Status.SUCCEEDED)
+        if job.attempts < job.max_attempts:
+            job.status = Status.PENDING
+        else:
+            job.status = Status.FAILED
+
+        repository.update_job(job)
+        return job
+
+    job.status = Status.SUCCEEDED
+    job.last_error = None
+
+    repository.update_job(job)
+    return job
 
 
 def handle_next_job(queue, repository):

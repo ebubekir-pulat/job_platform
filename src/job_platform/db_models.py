@@ -19,3 +19,9 @@ class Job(Base):
     payload: Mapped[dict] = mapped_column(JSON)
 
     status: Mapped[int] = mapped_column(Integer)
+
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+
+    max_attempts: Mapped[int] = mapped_column(Integer, default=3)
+
+    last_error: Mapped[str | None] = mapped_column(String, nullable=True)
