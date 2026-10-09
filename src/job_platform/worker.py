@@ -36,7 +36,6 @@ def run_job(job, repository):
 
 def handle_next_job(queue, repository):
     job_id = queue.dequeue()
-
     print(f"Received job {job_id}")
 
     job = repository.get(job_id)
@@ -46,8 +45,11 @@ def handle_next_job(queue, repository):
         queue.complete(job_id)
         return
 
-    run_job(job, repository)
+    result = run_job(job, repository)
     queue.complete(job_id)
+
+    if result.status == Status.PENDING:
+        queue.enqueue(job_id)
 
 
 def run_worker():

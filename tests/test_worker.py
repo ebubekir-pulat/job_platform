@@ -82,3 +82,71 @@ def test_handle_next_job_processes_queued_job():
     assert result is not None
     assert result.status == Status.SUCCEEDED
     assert queue.redis.llen(PROCESSING_QUEUE_NAME) == 0
+
+def test_failed_job_is_reenqueued():
+    queue = JobQueue()
+    repository = JobRepository()
+
+    job = Job(
+        type="test_job",
+        payload={"should_fail": True},
+    )
+
+    repository.create(job)
+    queue.enqueue(job.id)
+
+    handle_next_job(queue, repository)
+
+    result = repository.get(job.id)
+
+    assert result is not None
+    assert result.attempts == 1
+    assert result.status == Status.PENDING
+    assert result.last_error == "Job processing failed"
+
+    assert queue.redis.llen(PROCESSING_QUEUE_NAME) == 0
+    assert queue.redis.llen("jobs:queue") == 1
+
+def test_job_fails_after_three_attempts():
+    queue = JobQueue()
+    repository = JobRepository()
+
+    job = Job(
+        type="test_job",
+        payload={"should_fail": True},
+        max_attempts=3,
+    )
+
+    repository.create(job)
+    queue.enqueue(job.id)
+
+    # Attempt 1
+    handle_next_job(queue, repository)
+
+    result = repository.get(job.id)
+    assert result is not None
+    assert result.attempts == 1
+    assert result.status == Status.PENDING
+    assert queue.redis.llen("jobs:queue") == 1
+
+    # Attempt 2
+    handle_next_job(queue, repository)
+
+    result = repository.get(job.id)
+    assert result is not None
+    assert result.attempts == 2
+    assert result.status == Status.PENDING
+    assert queue.redis.llen("jobs:queue") == 1
+
+    # Attempt 3 — final failure
+    handle_next_job(queue, repository)
+
+    result = repository.get(job.id)
+    assert result is not None
+    assert result.attempts == 3
+    assert result.status == Status.FAILED
+    assert result.last_error == "Job processing failed"
+
+    # No queued or processing job remains
+    assert queue.redis.llen("jobs:queue") == 0
+    assert queue.redis.llen(PROCESSING_QUEUE_NAME) == 0
