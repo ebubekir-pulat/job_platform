@@ -38,6 +38,43 @@ redis.call('ZREM', KEYS[2], ARGV[1])
 return 1
 """
 
+RECOVER_SCRIPT = """
+local now = redis.call('TIME')
+local timestamp = tonumber(now[1])
+    + tonumber(now[2]) / 1000000
+
+local expired_jobs = redis.call(
+    'ZRANGE',
+    KEYS[3],
+    '-inf',
+    timestamp,
+    'BYSCORE',
+    'LIMIT',
+    0,
+    tonumber(ARGV[1])
+)
+
+local recovered = {}
+
+for _, job_id in ipairs(expired_jobs) do
+    local removed = redis.call(
+        'LREM',
+        KEYS[2],
+        1,
+        job_id
+    )
+
+    redis.call('ZREM', KEYS[3], job_id)
+
+    if removed == 1 then
+        redis.call('LPUSH', KEYS[1], job_id)
+        table.insert(recovered, job_id)
+    end
+end
+
+return recovered
+"""
+
 QUEUE_NAME = "jobs:queue"
 PROCESSING_QUEUE_NAME = "jobs:processing"
 
@@ -86,3 +123,18 @@ class JobQueue:
         )
 
         return [uuid.UUID(job_id) for job_id in job_ids]
+
+    def recover_expired_jobs(self, limit: int = 100) -> list[uuid.UUID]:
+        if limit < 1:
+            raise ValueError("limit must be at least 1")
+
+        recovered = self.redis.eval(
+            RECOVER_SCRIPT,
+            3,
+            QUEUE_NAME,
+            PROCESSING_QUEUE_NAME,
+            LEASE_KEY,
+            limit,
+        )
+
+        return [uuid.UUID(job_id) for job_id in recovered]

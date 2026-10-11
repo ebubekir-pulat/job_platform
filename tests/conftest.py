@@ -1,7 +1,7 @@
 import pytest
 import redis
 
-from job_platform.queue import QUEUE_NAME, PROCESSING_QUEUE_NAME
+from job_platform.job_queue import QUEUE_NAME, PROCESSING_QUEUE_NAME
 
 @pytest.fixture(autouse=True)
 def clear_redis_queues():

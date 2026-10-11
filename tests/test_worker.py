@@ -1,7 +1,7 @@
 from job_platform.models import Job, Status
 from job_platform.repository import JobRepository
 from job_platform.worker import process_job, run_job, handle_next_job
-from job_platform.queue import JobQueue, PROCESSING_QUEUE_NAME
+from job_platform.job_queue import JobQueue, PROCESSING_QUEUE_NAME
 
 
 def test_process_job_succeeds():

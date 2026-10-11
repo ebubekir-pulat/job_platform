@@ -3,7 +3,7 @@ from uuid import UUID
 
 from job_platform.models import Job, JobCreate
 from job_platform.repository import JobRepository
-from job_platform.queue import JobQueue
+from job_platform.job_queue import JobQueue
 
 app = FastAPI()
 

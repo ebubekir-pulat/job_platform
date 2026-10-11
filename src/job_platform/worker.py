@@ -1,5 +1,5 @@
 from job_platform.models import Status
-from job_platform.queue import JobQueue
+from job_platform.job_queue import JobQueue
 from job_platform.repository import JobRepository
 
 def process_job(job):

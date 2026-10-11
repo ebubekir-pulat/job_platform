@@ -1,6 +1,6 @@
 import uuid
 
-from job_platform.queue import JobQueue
+from job_platform.job_queue import JobQueue
 
 def test_enqueue_and_dequeue():
     queue = JobQueue()
