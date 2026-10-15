@@ -75,6 +75,27 @@ end
 return recovered
 """
 
+RENEW_LEASE_SCRIPT = """
+local score = redis.call('ZSCORE', KEYS[1], ARGV[1])
+
+if not score then
+    return 0
+end
+
+local now = redis.call('TIME')
+local timestamp = tonumber(now[1])
+    + tonumber(now[2]) / 1000000
+
+redis.call(
+    'ZADD',
+    KEYS[1],
+    timestamp + tonumber(ARGV[2]),
+    ARGV[1]
+)
+
+return 1
+"""
+
 QUEUE_NAME = "jobs:queue"
 PROCESSING_QUEUE_NAME = "jobs:processing"
 
@@ -87,8 +108,10 @@ class JobQueue:
             socket_timeout=None,
         )
 
+
     def enqueue(self, job_id: uuid.UUID) -> None:
         self.redis.rpush(QUEUE_NAME, str(job_id))
+
 
     def dequeue(self) -> uuid.UUID:
         while True:
@@ -106,6 +129,7 @@ class JobQueue:
 
             time.sleep(POLL_INTERVAL_SECONDS)
 
+
     def complete(self, job_id: uuid.UUID) -> None:
         self.redis.eval(
             COMPLETE_SCRIPT,
@@ -115,6 +139,7 @@ class JobQueue:
             str(job_id),
         )
 
+
     def get_processing_jobs(self) -> list[uuid.UUID]:
         job_ids = self.redis.lrange(
             PROCESSING_QUEUE_NAME,
@@ -123,6 +148,7 @@ class JobQueue:
         )
 
         return [uuid.UUID(job_id) for job_id in job_ids]
+
 
     def recover_expired_jobs(self, limit: int = 100) -> list[uuid.UUID]:
         if limit < 1:
@@ -138,3 +164,15 @@ class JobQueue:
         )
 
         return [uuid.UUID(job_id) for job_id in recovered]
+
+
+    def renew_lease(self, job_id: uuid.UUID) -> bool:
+        renewed = self.redis.eval(
+            RENEW_LEASE_SCRIPT,
+            1,
+            LEASE_KEY,
+            str(job_id),
+            LEASE_SECONDS,
+        )
+
+        return renewed == 1
