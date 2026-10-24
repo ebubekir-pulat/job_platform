@@ -23,6 +23,13 @@ def run_job(job, repository, queue):
         try:
             process_job(job)
         except Exception as exc:
+            # Never persist a result if the heartbeat detected lease loss.
+            if heartbeat.lease_lost.is_set():
+                raise LeaseLostError(
+                    f"Lost lease for job {job.id}"
+                ) from exc
+            
+            
             job.last_error = str(exc)
 
             if job.attempts < job.max_attempts:
@@ -32,6 +39,10 @@ def run_job(job, repository, queue):
 
             repository.update_job(job)
             return job
+
+        # Check lease status before persisting success.
+        if heartbeat.lease_lost.is_set():
+            raise LeaseLostError(f"Lost lease for job {job.id}")
 
         job.status = Status.SUCCEEDED
         job.last_error = None
@@ -51,7 +62,12 @@ def handle_next_job(queue, repository):
         queue.complete(job_id)
         return
 
-    result = run_job(job, repository, queue)
+    try:
+        result = run_job(job, repository, queue)
+    except LeaseLostError:
+        print(f"Lease lost for job {job_id}; skipping completion")
+        return
+
     queue.complete(job_id)
 
     if result.status == Status.PENDING:
