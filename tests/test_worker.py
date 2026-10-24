@@ -29,6 +29,7 @@ def test_process_job_fails():
 
 def test_run_job_succeeds():
     repository = JobRepository()
+    queue = JobQueue()
 
     job = Job(
         type="test_job",
@@ -37,9 +38,13 @@ def test_run_job_succeeds():
 
     repository.create(job)
 
-    run_job(job, repository)
+    # Simulate a job already claimed from Redis.
+    queue.redis.zadd(
+        "jobs:processing:leases",
+        {str(job.id): 9999999999},
+    )
 
-    result = repository.get(job.id)
+    result = run_job(job, repository, queue)
 
     assert result is not None
     assert result.status == Status.SUCCEEDED
@@ -47,6 +52,7 @@ def test_run_job_succeeds():
 
 def test_run_job_fails_with_retry():
     repository = JobRepository()
+    queue = JobQueue()
 
     job = Job(
         type="test_job",
@@ -55,7 +61,12 @@ def test_run_job_fails_with_retry():
 
     repository.create(job)
 
-    result = run_job(job, repository)
+    queue.redis.zadd(
+        "jobs:processing:leases",
+        {str(job.id): 9999999999},
+    )
+
+    result = run_job(job, repository, queue)
 
     assert result is not None
     assert result.attempts == 1

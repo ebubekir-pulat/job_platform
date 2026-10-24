@@ -1,6 +1,11 @@
 from job_platform.models import Status
 from job_platform.job_queue import JobQueue
 from job_platform.repository import JobRepository
+from job_platform.lease_heartbeat import LeaseHeartbeat
+
+class LeaseLostError(Exception):
+    """Raised when a worker no longer has a valid job lease."""
+
 
 def process_job(job):
     print(f"Processing job {job.id}")
@@ -11,27 +16,28 @@ def process_job(job):
     print(f"Job {job.id} succeeded")
 
 
-def run_job(job, repository):
+def run_job(job, repository, queue):
     job = repository.start_attempt(job.id)
+    
+    with LeaseHeartbeat(queue, job.id) as heartbeat:
+        try:
+            process_job(job)
+        except Exception as exc:
+            job.last_error = str(exc)
 
-    try:
-        process_job(job)
-    except Exception as exc:
-        job.last_error = str(exc)
+            if job.attempts < job.max_attempts:
+                job.status = Status.PENDING
+            else:
+                job.status = Status.FAILED
 
-        if job.attempts < job.max_attempts:
-            job.status = Status.PENDING
-        else:
-            job.status = Status.FAILED
+            repository.update_job(job)
+            return job
+
+        job.status = Status.SUCCEEDED
+        job.last_error = None
 
         repository.update_job(job)
         return job
-
-    job.status = Status.SUCCEEDED
-    job.last_error = None
-
-    repository.update_job(job)
-    return job
 
 
 def handle_next_job(queue, repository):
@@ -45,7 +51,7 @@ def handle_next_job(queue, repository):
         queue.complete(job_id)
         return
 
-    result = run_job(job, repository)
+    result = run_job(job, repository, queue)
     queue.complete(job_id)
 
     if result.status == Status.PENDING:

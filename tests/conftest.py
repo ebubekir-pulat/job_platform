@@ -1,7 +1,7 @@
 import pytest
 import redis
 
-from job_platform.job_queue import QUEUE_NAME, PROCESSING_QUEUE_NAME
+from job_platform.job_queue import QUEUE_NAME, PROCESSING_QUEUE_NAME, LEASE_KEY
 
 @pytest.fixture(autouse=True)
 def clear_redis_queues():
@@ -14,4 +14,5 @@ def clear_redis_queues():
     redis_client.delete(
         QUEUE_NAME,
         PROCESSING_QUEUE_NAME,
+        LEASE_KEY,
     )
