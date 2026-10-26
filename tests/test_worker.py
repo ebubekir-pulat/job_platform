@@ -1,7 +1,7 @@
 from job_platform.models import Job, Status
 from job_platform.repository import JobRepository
 from job_platform.worker import process_job, run_job, handle_next_job
-from job_platform.job_queue import JobQueue, PROCESSING_QUEUE_NAME
+from job_platform.job_queue import JobQueue, QUEUE_NAME, PROCESSING_QUEUE_NAME, LEASE_KEY, LEASE_OWNER_KEY
 
 
 def test_process_job_succeeds():
@@ -28,50 +28,63 @@ def test_process_job_fails():
 
 
 def test_run_job_succeeds():
-    repository = JobRepository()
-    queue = JobQueue()
+    try:
+        repository = JobRepository()
+        queue = JobQueue()
 
-    job = Job(
-        type="test_job",
-        payload={"message": "hello"},
-    )
+        job = Job(
+            type="test_job",
+            payload={"message": "hello"},
+        )
 
-    repository.create(job)
+        repository.create(job)
 
-    # Simulate a job already claimed from Redis.
-    queue.redis.zadd(
-        "jobs:processing:leases",
-        {str(job.id): 9999999999},
-    )
+        queue.enqueue(job.id)
+        claimed_id, lease_token = queue.dequeue()
 
-    result = run_job(job, repository, queue)
+        assert claimed_id == job.id
 
-    assert result is not None
-    assert result.status == Status.SUCCEEDED
+        result = run_job(job, repository, queue, lease_token)
+        queue.complete(job.id, lease_token)
+
+        assert result is not None
+        assert result.status == Status.SUCCEEDED
+    finally:
+        queue.redis.lrem(QUEUE_NAME, 0, str(job.id))
+        queue.redis.lrem(PROCESSING_QUEUE_NAME, 0, str(job.id))
+        queue.redis.zrem(LEASE_KEY, str(job.id))
+        queue.redis.hdel(LEASE_OWNER_KEY, str(job.id))
 
 
 def test_run_job_fails_with_retry():
-    repository = JobRepository()
-    queue = JobQueue()
+    try:
+        repository = JobRepository()
+        queue = JobQueue()
 
-    job = Job(
-        type="test_job",
-        payload={"should_fail": True},
-    )
+        job = Job(
+            type="test_job",
+            payload={"should_fail": True},
+        )
 
-    repository.create(job)
+        repository.create(job)
 
-    queue.redis.zadd(
-        "jobs:processing:leases",
-        {str(job.id): 9999999999},
-    )
+        queue.enqueue(job.id)
+        claimed_id, lease_token = queue.dequeue()
 
-    result = run_job(job, repository, queue)
+        assert claimed_id == job.id
 
-    assert result is not None
-    assert result.attempts == 1
-    assert result.status == Status.PENDING
-    assert result.last_error == "Job processing failed"
+        result = run_job(job, repository, queue, lease_token)
+        queue.complete(job.id, lease_token)
+
+        assert result is not None
+        assert result.attempts == 1
+        assert result.status == Status.PENDING
+        assert result.last_error == "Job processing failed"
+    finally:
+        queue.redis.lrem(QUEUE_NAME, 0, str(job.id))
+        queue.redis.lrem(PROCESSING_QUEUE_NAME, 0, str(job.id))
+        queue.redis.zrem(LEASE_KEY, str(job.id))
+        queue.redis.hdel(LEASE_OWNER_KEY, str(job.id))
 
 
 def test_handle_next_job_processes_queued_job():

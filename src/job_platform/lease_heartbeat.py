@@ -1,5 +1,6 @@
 import logging
 import threading
+import uuid
 
 from job_platform.job_queue import JobQueue, LEASE_SECONDS
 
@@ -10,7 +11,8 @@ class LeaseHeartbeat:
     def __init__(
         self,
         queue: JobQueue,
-        job_id,
+        job_id: uuid.UUID,
+        lease_token: str,
         interval: float = 60,
     ):
         if interval <= 0 or interval >= LEASE_SECONDS:
@@ -21,18 +23,19 @@ class LeaseHeartbeat:
 
         self.queue = queue
         self.job_id = job_id
+        self.lease_token = lease_token
         self.interval = interval
         self._stop_event = threading.Event()
+        self.lease_lost = threading.Event()
         self._thread = threading.Thread(
             target=self._run,
             daemon=True,
         )
-        self.lease_lost = threading.Event()
 
     def _run(self):
         while not self._stop_event.wait(self.interval):
             try:
-                renewed = self.queue.renew_lease(self.job_id)
+                renewed = self.queue.renew_lease(self.job_id, self.lease_token)
             except Exception:
                 logger.exception(
                     "Failed to renew lease for job %s",
@@ -43,7 +46,7 @@ class LeaseHeartbeat:
 
             if not renewed:
                 logger.error(
-                    "Lease no longer exists for job %s",
+                    "Lease ownership lost for job %s",
                     self.job_id,
                 )
                 self.lease_lost.set()

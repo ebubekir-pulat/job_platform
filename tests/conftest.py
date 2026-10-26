@@ -1,7 +1,7 @@
 import pytest
 import redis
 
-from job_platform.job_queue import QUEUE_NAME, PROCESSING_QUEUE_NAME, LEASE_KEY
+from job_platform.job_queue import QUEUE_NAME, PROCESSING_QUEUE_NAME, LEASE_KEY, LEASE_OWNER_KEY
 
 @pytest.fixture(autouse=True)
 def clear_redis_queues():
@@ -15,4 +15,5 @@ def clear_redis_queues():
         QUEUE_NAME,
         PROCESSING_QUEUE_NAME,
         LEASE_KEY,
+        LEASE_OWNER_KEY,
     )

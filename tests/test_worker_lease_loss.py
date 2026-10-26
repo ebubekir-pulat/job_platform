@@ -1,5 +1,6 @@
-
 from unittest.mock import patch
+import threading
+import uuid
 
 import pytest
 
@@ -13,9 +14,11 @@ def test_run_job_does_not_save_success_after_lease_loss():
     job = Job(type="test_job", payload={"message": "hello"})
     repository.create(job)
 
+    lease_token = str(uuid.uuid4())
+
     class FakeHeartbeat:
-        def __init__(self, queue, job_id):
-            self.lease_lost = __import__("threading").Event()
+        def __init__(self, queue, job_id, lease_token):
+            self.lease_lost = threading.Event()
 
         def __enter__(self):
             # Simulate the lease being lost while processing.
@@ -30,7 +33,7 @@ def test_run_job_does_not_save_success_after_lease_loss():
         FakeHeartbeat,
     ):
         with pytest.raises(LeaseLostError):
-            run_job(job, repository, queue=None)
+            run_job(job, repository, queue=None, lease_token=lease_token)
 
     result = repository.get(job.id)
     assert result is not None

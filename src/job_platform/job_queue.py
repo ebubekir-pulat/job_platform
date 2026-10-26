@@ -1,11 +1,14 @@
 import uuid
 import redis
-
 import time
 
 LEASE_KEY = "jobs:processing_leases"
+LEASE_OWNER_KEY = "jobs:processing:owners"
 LEASE_SECONDS = 300
 POLL_INTERVAL_SECONDS = 0.25
+
+QUEUE_NAME = "jobs:queue"
+PROCESSING_QUEUE_NAME = "jobs:processing"
 
 CLAIM_SCRIPT = """
 local job_id = redis.call(
@@ -16,25 +19,43 @@ local job_id = redis.call(
     'LEFT'
 )
 
-if job_id then
-    local now = redis.call('TIME')
-    local timestamp = tonumber(now[1])
-        + tonumber(now[2]) / 1000000
-
-    redis.call(
-        'ZADD',
-        KEYS[3],
-        timestamp + tonumber(ARGV[1]),
-        job_id
-    )
+if not job_id then
+    return nil
 end
 
-return job_id
+local token = ARGV[2]
+
+local now = redis.call('TIME')
+local timestamp = tonumber(now[1])
+    + tonumber(now[2]) / 1000000
+
+redis.call(
+    'ZADD',
+    KEYS[3],
+    timestamp + tonumber(ARGV[1]),
+    job_id
+)
+
+redis.call('HSET', KEYS[4], job_id, token)
+
+return {job_id, token}
 """
 
 COMPLETE_SCRIPT = """
-redis.call('LREM', KEYS[1], 1, ARGV[1])
-redis.call('ZREM', KEYS[2], ARGV[1])
+local current_token = redis.call(
+    'HGET',
+    KEYS[3],
+    ARGV[2]
+)
+
+if not current_token or current_token ~= ARGV[1] then
+    return 0
+end
+
+redis.call('LREM', KEYS[1], 1, ARGV[2])
+redis.call('ZREM', KEYS[2], ARGV[2])
+redis.call('HDEL', KEYS[3], ARGV[2])
+
 return 1
 """
 
@@ -65,6 +86,7 @@ for _, job_id in ipairs(expired_jobs) do
     )
 
     redis.call('ZREM', KEYS[3], job_id)
+    redis.call('HDEL', KEYS[4], job_id)
 
     if removed == 1 then
         redis.call('LPUSH', KEYS[1], job_id)
@@ -76,6 +98,16 @@ return recovered
 """
 
 RENEW_LEASE_SCRIPT = """
+local current_token = redis.call(
+    'HGET',
+    KEYS[2],
+    ARGV[1]
+)
+
+if not current_token or current_token ~= ARGV[2] then
+    return 0
+end
+
 local score = redis.call('ZSCORE', KEYS[1], ARGV[1])
 
 if not score then
@@ -89,15 +121,13 @@ local timestamp = tonumber(now[1])
 redis.call(
     'ZADD',
     KEYS[1],
-    timestamp + tonumber(ARGV[2]),
+    timestamp + tonumber(ARGV[3]),
     ARGV[1]
 )
 
 return 1
 """
 
-QUEUE_NAME = "jobs:queue"
-PROCESSING_QUEUE_NAME = "jobs:processing"
 
 class JobQueue:
     def __init__(self):
@@ -113,31 +143,40 @@ class JobQueue:
         self.redis.rpush(QUEUE_NAME, str(job_id))
 
 
-    def dequeue(self) -> uuid.UUID:
+    def dequeue(self) -> tuple[uuid.UUID, str]:
         while True:
-            job_id = self.redis.eval(
+            token = str(uuid.uuid4())
+
+            result = self.redis.eval(
                 CLAIM_SCRIPT,
-                3,
+                4,
                 QUEUE_NAME,
                 PROCESSING_QUEUE_NAME,
                 LEASE_KEY,
+                LEASE_OWNER_KEY,
                 LEASE_SECONDS,
+                token,
             )
 
-            if job_id is not None:
-                return uuid.UUID(job_id)
+            if result is not None:
+                job_id, lease_token = result
+                return uuid.UUID(job_id), lease_token
 
             time.sleep(POLL_INTERVAL_SECONDS)
 
 
-    def complete(self, job_id: uuid.UUID) -> None:
-        self.redis.eval(
+    def complete(self, job_id: uuid.UUID, lease_token: str) -> bool:
+        completed = self.redis.eval(
             COMPLETE_SCRIPT,
-            2,
+            3,
             PROCESSING_QUEUE_NAME,
             LEASE_KEY,
+            LEASE_OWNER_KEY,
+            lease_token,
             str(job_id),
         )
+
+        return completed == 1
 
 
     def get_processing_jobs(self) -> list[uuid.UUID]:
@@ -156,22 +195,25 @@ class JobQueue:
 
         recovered = self.redis.eval(
             RECOVER_SCRIPT,
-            3,
+            4,
             QUEUE_NAME,
             PROCESSING_QUEUE_NAME,
             LEASE_KEY,
+            LEASE_OWNER_KEY,
             limit,
         )
 
         return [uuid.UUID(job_id) for job_id in recovered]
 
 
-    def renew_lease(self, job_id: uuid.UUID) -> bool:
+    def renew_lease(self, job_id: uuid.UUID, lease_token: str) -> bool:
         renewed = self.redis.eval(
             RENEW_LEASE_SCRIPT,
-            1,
+            2,
             LEASE_KEY,
+            LEASE_OWNER_KEY,
             str(job_id),
+            lease_token,
             LEASE_SECONDS,
         )
 

@@ -1,4 +1,3 @@
-
 import threading
 import uuid
 
@@ -10,7 +9,7 @@ class FakeQueue:
         self.renewal_event = threading.Event()
         self.renewal_count = 0
 
-    def renew_lease(self, job_id):
+    def renew_lease(self, job_id, lease_token):
         self.renewal_count += 1
         self.renewal_event.set()
         return True
@@ -19,8 +18,9 @@ class FakeQueue:
 def test_heartbeat_renews_lease():
     queue = FakeQueue()
     job_id = uuid.uuid4()
+    lease_token = str(uuid.uuid4())
 
-    with LeaseHeartbeat(queue, job_id, interval=0.02):
+    with LeaseHeartbeat(queue, job_id, lease_token, interval=0.02):
         renewed = queue.renewal_event.wait(timeout=1)
 
     assert renewed

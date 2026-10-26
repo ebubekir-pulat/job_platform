@@ -16,10 +16,10 @@ def process_job(job):
     print(f"Job {job.id} succeeded")
 
 
-def run_job(job, repository, queue):
+def run_job(job, repository, queue, lease_token):
     job = repository.start_attempt(job.id)
     
-    with LeaseHeartbeat(queue, job.id) as heartbeat:
+    with LeaseHeartbeat(queue, job.id, lease_token) as heartbeat:
         try:
             process_job(job)
         except Exception as exc:
@@ -52,23 +52,27 @@ def run_job(job, repository, queue):
 
 
 def handle_next_job(queue, repository):
-    job_id = queue.dequeue()
+    job_id, lease_token = queue.dequeue()
     print(f"Received job {job_id}")
 
     job = repository.get(job_id)
 
     if job is None:
         print(f"Job {job_id} not found")
-        queue.complete(job_id)
+        queue.complete(job_id, lease_token)
         return
 
     try:
-        result = run_job(job, repository, queue)
+        result = run_job(job, repository, queue, lease_token)
     except LeaseLostError:
         print(f"Lease lost for job {job_id}; skipping completion")
         return
 
-    queue.complete(job_id)
+    completed = queue.complete(job_id, lease_token)
+
+    if not completed:
+        print(f"Could not complete job {job_id}: lease ownership lost")
+        return
 
     if result.status == Status.PENDING:
         queue.enqueue(job_id)
