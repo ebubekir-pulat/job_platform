@@ -72,15 +72,23 @@ class JobRepository:
                 last_error=db_job.last_error,
             )
 
-    def update_job(self, job: Job) -> None:
+    def update_job(self, job: Job) -> bool:
         with get_session() as session:
-            db_job = session.get(JobDB, job.id)
-
-            if db_job is None:
-                raise ValueError(f"Job {job.id} not found")
-
-            db_job.status = job.status.value
-            db_job.attempts = job.attempts
-            db_job.last_error = job.last_error
+            updated = (
+                session.query(JobDB)
+                .filter(
+                    JobDB.id == job.id,
+                    JobDB.status == Status.RUNNING.value,
+                    JobDB.attempts == job.attempts,
+                )
+                .update(
+                    {
+                        JobDB.status: job.status.value,
+                        JobDB.last_error: job.last_error,
+                    },
+                    synchronize_session=False,
+                )
+            )
 
             session.commit()
+            return updated == 1

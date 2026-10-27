@@ -42,3 +42,80 @@ def test_update_status():
 
     assert result is not None
     assert result.status == Status.RUNNING
+
+
+def test_update_job_rejects_non_running_job():
+    repository = JobRepository()
+
+    job = Job(
+        type="test_job",
+        payload={"message": "hello"},
+    )
+
+    stale_job = repository.create(job)
+    stale_job = repository.get(stale_job.id)
+
+    assert stale_job is not None
+
+    repository.update_status(stale_job.id, Status.FAILED)
+    stale_job.status = Status.SUCCEEDED
+
+    updated = repository.update_job(stale_job)
+
+    assert updated is False
+
+    current_job = repository.get(stale_job.id)
+    assert current_job is not None
+    assert current_job.status == Status.FAILED
+
+
+def test_update_job_rejects_stale_attempts_no_status_diff():
+    repository = JobRepository()
+
+    job = Job(
+        type="test_job",
+        payload={"message": "hello"},
+    )
+
+    stale_job = repository.create(job)
+    stale_job = repository.get(stale_job.id)
+
+    assert stale_job is not None
+
+    repository.start_attempt(stale_job.id)
+    stale_job.status = Status.RUNNING
+
+    updated = repository.update_job(stale_job)
+
+    assert updated is False
+
+    current_job = repository.get(stale_job.id)
+    assert current_job is not None
+    assert current_job.status == Status.RUNNING
+    assert current_job.attempts == stale_job.attempts + 1
+
+
+def test_update_job_rejects_stale_attempts_status_diff():
+    repository = JobRepository()
+
+    job = Job(
+        type="test_job",
+        payload={"message": "hello"},
+    )
+
+    stale_job = repository.create(job)
+    stale_job = repository.get(stale_job.id)
+
+    assert stale_job is not None
+
+    repository.start_attempt(stale_job.id)
+    stale_job.status = Status.SUCCEEDED
+
+    updated = repository.update_job(stale_job)
+
+    assert updated is False
+
+    current_job = repository.get(stale_job.id)
+    assert current_job is not None
+    assert current_job.status == Status.RUNNING
+    assert current_job.attempts == stale_job.attempts + 1

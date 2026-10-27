@@ -37,7 +37,11 @@ def run_job(job, repository, queue, lease_token):
             else:
                 job.status = Status.FAILED
 
-            repository.update_job(job)
+            if not repository.update_job(job):
+                raise LeaseLostError(
+                    f"Job {job.id} was updated by another worker"
+                )
+
             return job
 
         # Check lease status before persisting success.
@@ -47,7 +51,11 @@ def run_job(job, repository, queue, lease_token):
         job.status = Status.SUCCEEDED
         job.last_error = None
 
-        repository.update_job(job)
+        if not repository.update_job(job):
+            raise LeaseLostError(
+                f"Job {job.id} was updated by another worker"
+            )
+
         return job
 
 

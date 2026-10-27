@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from job_platform.models import Job, Status
 from job_platform.repository import JobRepository
 from job_platform.worker import process_job, run_job, handle_next_job
@@ -131,6 +133,7 @@ def test_failed_job_is_reenqueued():
     assert queue.redis.llen(PROCESSING_QUEUE_NAME) == 0
     assert queue.redis.llen("jobs:queue") == 1
 
+
 def test_job_fails_after_three_attempts():
     queue = JobQueue()
     repository = JobRepository()
@@ -174,3 +177,23 @@ def test_job_fails_after_three_attempts():
     # No queued or processing job remains
     assert queue.redis.llen("jobs:queue") == 0
     assert queue.redis.llen(PROCESSING_QUEUE_NAME) == 0
+
+
+def test_rejected_job_update_does_not_complete_queue():
+    queue = JobQueue()
+    repository = JobRepository()
+
+    job = Job(
+        type="test_job",
+        payload={"message": "hello"},
+    )
+
+    repository.create(job)
+    queue.enqueue(job.id)
+
+    # Simulate another worker winning the database update race.
+    with patch.object(repository, "update_job", return_value=False):
+        handle_next_job(queue, repository)
+
+    assert job.id in queue.get_processing_jobs()
+    assert queue.redis.zscore(LEASE_KEY, str(job.id)) is not None
