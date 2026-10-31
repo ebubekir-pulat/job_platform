@@ -23,6 +23,7 @@ class JobRepository:
 
         return job
 
+
     def get(self, job_id: UUID) -> Job | None:
         with get_session() as session:
             db_job = session.get(JobDB, job_id)
@@ -41,6 +42,7 @@ class JobRepository:
                 last_error=db_job.last_error,
             )
 
+
     def update_status(self, job_id: UUID, status: Status) -> None:
         with get_session() as session:
             db_job = session.get(JobDB, job_id)
@@ -51,12 +53,16 @@ class JobRepository:
             db_job.status = status.value
             session.commit()
 
+
     def start_attempt(self, job_id: UUID) -> Job:
         with get_session() as session:
             db_job = session.get(JobDB, job_id)
 
             if db_job is None:
                 raise ValueError(f"Job {job_id} not found")
+
+            if db_job.status in (Status.SUCCEEDED.value, Status.FAILED.value):
+                raise ValueError(f"Job {job_id} is already finished")
 
             db_job.attempts += 1
             db_job.fencing_token += 1
@@ -75,6 +81,7 @@ class JobRepository:
                 max_attempts=db_job.max_attempts,
                 last_error=db_job.last_error,
             )
+
 
     def update_job(self, job: Job) -> bool:
         with get_session() as session:
