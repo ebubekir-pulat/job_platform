@@ -1,0 +1,63 @@
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-job_platform}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-job_platform}
+      POSTGRES_DB: ${POSTGRES_DB:-job_platform}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-job_platform} -d ${POSTGRES_DB:-job_platform}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:8
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  migrate:
+    build: .
+    command: alembic upgrade head
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-job_platform}:${POSTGRES_PASSWORD:-job_platform}@postgres:5432/${POSTGRES_DB:-job_platform}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build: .
+    command: uvicorn job_platform.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-job_platform}:${POSTGRES_PASSWORD:-job_platform}@postgres:5432/${POSTGRES_DB:-job_platform}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: .
+    command: python -m job_platform.worker
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-job_platform}:${POSTGRES_PASSWORD:-job_platform}@postgres:5432/${POSTGRES_DB:-job_platform}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

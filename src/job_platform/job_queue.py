@@ -1,3 +1,4 @@
+import os
 import uuid
 import redis
 import time
@@ -132,8 +133,8 @@ return 1
 class JobQueue:
     def __init__(self):
         self.redis = redis.Redis(
-            host="localhost",
-            port=6379,
+            host=os.getenv("REDIS_HOST", "localhost"),
+            port=int(os.getenv("REDIS_PORT", "6379")),
             decode_responses=True,
             socket_timeout=None,
         )
