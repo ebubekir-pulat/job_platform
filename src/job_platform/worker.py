@@ -1,3 +1,7 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
 from job_platform.models import Status
 from job_platform.job_queue import JobQueue
 from job_platform.repository import JobRepository
@@ -73,7 +77,17 @@ def handle_next_job(queue, repository):
     try:
         result = run_job(job, repository, queue, lease_token)
     except LeaseLostError:
-        print(f"Lease lost for job {job_id}; skipping completion")
+        logger.warning(
+            "Lease lost for job %s; skipping completion",
+            job_id,
+        )
+        return
+    except Exception:
+        logger.exception(
+            "Unexpected error processing job %s; "
+            "leaving it for lease recovery",
+            job_id,
+        )
         return
 
     completed = queue.complete(job_id, lease_token)
