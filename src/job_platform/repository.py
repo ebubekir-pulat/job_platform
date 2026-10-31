@@ -12,6 +12,7 @@ class JobRepository:
             payload=job.payload,
             status=job.status.value,
             attempts=job.attempts,
+            fencing_token=job.fencing_token,
             max_attempts=job.max_attempts,
             last_error=job.last_error,
         )
@@ -35,6 +36,7 @@ class JobRepository:
                 payload=db_job.payload,
                 status=db_job.status,
                 attempts=db_job.attempts,
+                fencing_token=db_job.fencing_token,
                 max_attempts=db_job.max_attempts,
                 last_error=db_job.last_error,
             )
@@ -57,6 +59,7 @@ class JobRepository:
                 raise ValueError(f"Job {job_id} not found")
 
             db_job.attempts += 1
+            db_job.fencing_token += 1
             db_job.status = Status.RUNNING.value
 
             session.commit()
@@ -68,6 +71,7 @@ class JobRepository:
                 payload=db_job.payload,
                 status=db_job.status,
                 attempts=db_job.attempts,
+                fencing_token=db_job.fencing_token,
                 max_attempts=db_job.max_attempts,
                 last_error=db_job.last_error,
             )
@@ -80,6 +84,7 @@ class JobRepository:
                     JobDB.id == job.id,
                     JobDB.status == Status.RUNNING.value,
                     JobDB.attempts == job.attempts,
+                    JobDB.fencing_token == job.fencing_token,
                 )
                 .update(
                     {

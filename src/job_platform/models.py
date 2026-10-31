@@ -19,5 +19,6 @@ class Job(BaseModel):
     payload: dict
     status: Status = Status.PENDING
     attempts: int = 0
+    fencing_token: int = 0
     max_attempts: int = 3
     last_error: str | None = None

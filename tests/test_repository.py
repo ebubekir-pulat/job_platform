@@ -119,3 +119,61 @@ def test_update_job_rejects_stale_attempts_status_diff():
     assert current_job is not None
     assert current_job.status == Status.RUNNING
     assert current_job.attempts == stale_job.attempts + 1
+
+
+def test_update_job_rejects_stale_fencing_token_with_diff_status():
+    repository = JobRepository()
+
+    job = Job(
+        type="test_job",
+        payload={"message": "hello"},
+    )
+
+    repository.create(job)
+
+    stale_job = repository.start_attempt(job.id)
+
+    # Simulate a newer claim.
+    current_job = repository.start_attempt(job.id)
+
+    assert current_job.fencing_token == stale_job.fencing_token + 1
+
+    stale_job.status = Status.SUCCEEDED
+
+    updated = repository.update_job(stale_job)
+
+    assert updated is False
+
+    result = repository.get(job.id)
+
+    assert result is not None
+    assert result.status == Status.RUNNING
+    assert result.fencing_token == current_job.fencing_token
+
+
+def test_update_job_rejects_stale_fencing_token_with_same_status():
+    repository = JobRepository()
+
+    job = Job(
+        type="test_job",
+        payload={"message": "hello"},
+    )
+
+    repository.create(job)
+
+    stale_job = repository.start_attempt(job.id)
+
+    # Simulate a newer claim.
+    current_job = repository.start_attempt(job.id)
+
+    assert current_job.fencing_token == stale_job.fencing_token + 1
+
+    updated = repository.update_job(stale_job)
+
+    assert updated is False
+
+    result = repository.get(job.id)
+
+    assert result is not None
+    assert result.status == Status.RUNNING
+    assert result.fencing_token == current_job.fencing_token
