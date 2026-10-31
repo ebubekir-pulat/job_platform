@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import JSON, Integer, String
+from sqlalchemy import JSON, Integer, String, BigInteger
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 class Base(DeclarativeBase):
@@ -21,6 +21,8 @@ class Job(Base):
     status: Mapped[int] = mapped_column(Integer)
 
     attempts: Mapped[int] = mapped_column(Integer, default=0)
+
+    fencing_token: Mapped[int] = mapped_column(BigInteger, default=0)
 
     max_attempts: Mapped[int] = mapped_column(Integer, default=3)
 
